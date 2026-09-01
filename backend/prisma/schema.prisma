@@ -1,0 +1,260 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Projects represent reconciliation runs (e.g., "April 2026 Reconciliation")
+model Project {
+  id        String   @id @default(cuid())
+  name      String
+  description String?
+  startDate DateTime
+  endDate   DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  uploads           Upload[]
+  reconciliations   Reconciliation[]
+  columnMappings    ColumnMapping[]
+
+  @@index([createdAt])
+}
+
+// Upload sessions for file uploads
+model Upload {
+  id        String   @id @default(cuid())
+  projectId String
+  fileName  String
+  fileType  String   // "books" or "gstr2b"
+  mimeType  String
+  fileSize  Int
+  columnMapping Json  // Stores column mapping for this upload
+  uploadedAt DateTime @default(now())
+
+  // Data storage (normalized)
+  invoices  Invoice[]
+  errors    ValidationError[]
+
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([fileType])
+}
+
+// Suppliers extracted from invoices
+model Supplier {
+  id        String   @id @default(cuid())
+  gstin     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+
+  invoices  Invoice[]
+  reconciliations ReconciliationGstin[]
+
+  @@index([gstin])
+}
+
+// Individual invoice records (normalized from both Books and GSTR-2B)
+model Invoice {
+  id                String   @id @default(cuid())
+  uploadId          String
+  uploadFileType    String   // "books" or "gstr2b"
+  supplierId        String
+  gstin             String
+  supplierName      String?
+  invoiceNumber     String
+  invoiceDateString String   // ISO format
+  taxableValue      Float
+  igst              Float
+  cgst              Float
+  sgst              Float
+  cess              Float
+  invoiceTotal      Float
+  createdAt         DateTime @default(now())
+
+  upload     Upload    @relation(fields: [uploadId], references: [id], onDelete: Cascade)
+  supplier   Supplier  @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  matches    Match[]
+  duplicates DuplicateRecord[]
+
+  @@index([uploadId])
+  @@index([gstin])
+  @@index([invoiceNumber])
+  @@index([uploadFileType])
+  @@unique([uploadId, uploadFileType, gstin, invoiceNumber])
+}
+
+// Validation errors found during import
+model ValidationError {
+  id        String   @id @default(cuid())
+  uploadId  String
+  rowNumber Int
+  field     String
+  value     String?
+  errorType String   // "INVALID_FORMAT", "MISSING_REQUIRED", "INVALID_GSTIN", etc.
+  message   String
+  createdAt DateTime @default(now())
+
+  upload    Upload    @relation(fields: [uploadId], references: [id], onDelete: Cascade)
+
+  @@index([uploadId])
+  @@index([errorType])
+}
+
+// Column mapping configuration
+model ColumnMapping {
+  id        String   @id @default(cuid())
+  projectId String
+  fileType  String   // "books" or "gstr2b"
+  mapping   Json     // { excelColumnName: standardFieldName }
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, fileType])
+  @@index([projectId])
+}
+
+// Reconciliation run metadata
+model Reconciliation {
+  id        String   @id @default(cuid())
+  projectId String
+  booksUploadId String
+  gstr2bUploadId String
+  status    String   // "PENDING", "RUNNING", "COMPLETED", "FAILED"
+  startedAt DateTime @default(now())
+  completedAt DateTime?
+  errorMessage String?
+  settings  Json     // Tolerance levels and other settings
+  createdAt DateTime @default(now())
+
+  // Results
+  gstinMatches      ReconciliationGstin[]
+  matches           Match[]
+  possibleMatches   PossibleMatch[]
+  duplicates        DuplicateRecord[]
+
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([status])
+}
+
+// GSTIN-level reconciliation results
+model ReconciliationGstin {
+  id                String   @id @default(cuid())
+  reconciliationId  String
+  supplierId        String
+  gstin             String
+  booksCount        Int
+  gstr2bCount       Int
+  booksTaxableTotal Float
+  gstr2bTaxableTotal Float
+  booksTaxTotal     Float
+  gstr2bTaxTotal    Float
+  booksTotalInvoice Float
+  gstr2bTotalInvoice Float
+  status            String   // "MATCHED", "MISMATCHED", "ONLY_IN_BOOKS", "ONLY_IN_2B"
+  toleranceExceeded Boolean  @default(false)
+  createdAt         DateTime @default(now())
+
+  reconciliation Reconciliation @relation(fields: [reconciliationId], references: [id], onDelete: Cascade)
+  supplier       Supplier       @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+
+  @@index([reconciliationId])
+  @@index([status])
+  @@index([gstin])
+}
+
+// Invoice-level matches
+model Match {
+  id                    String   @id @default(cuid())
+  reconciliationId      String
+  booksInvoiceId        String
+  gstr2bInvoiceId       String
+  matchType             String   // "EXACT", "PARTIAL", "ONLY_BOOKS", "ONLY_2B"
+  
+  // Value comparisons
+  taxableValueMatch     Boolean
+  igstMatch             Boolean
+  cgstMatch             Boolean
+  sgstMatch             Boolean
+  cessMatch             Boolean
+  totalValueMatch       Boolean
+  dateMatch             Boolean
+  
+  // Differences
+  taxableValueDiff      Float
+  igstDiff              Float
+  cgstDiff              Float
+  sgstDiff              Float
+  cessDiff              Float
+  totalValueDiff        Float
+  
+  matchStatus           String   // "EXACT_MATCH", "TAXABLE_MISMATCH", "TAX_MISMATCH", etc.
+  createdAt             DateTime @default(now())
+
+  reconciliation Reconciliation @relation(fields: [reconciliationId], references: [id], onDelete: Cascade)
+  booksInvoice   Invoice         @relation(fields: [booksInvoiceId], references: [id], onDelete: Restrict, name: "books_match")
+  gstr2bInvoice  Invoice         @relation(fields: [gstr2bInvoiceId], references: [id], onDelete: Restrict, name: "gstr2b_match")
+
+  @@unique([reconciliationId, booksInvoiceId, gstr2bInvoiceId])
+  @@index([reconciliationId])
+  @@index([matchType])
+}
+
+// Possible fuzzy matches
+model PossibleMatch {
+  id                String   @id @default(cuid())
+  reconciliationId  String
+  booksInvoiceId    String
+  gstr2bInvoiceId   String
+  confidence        Float    // 0-100
+  reason            String   // Why we think they match
+  reviewed          Boolean  @default(false)
+  accepted          Boolean?
+  createdAt         DateTime @default(now())
+
+  reconciliation Reconciliation @relation(fields: [reconciliationId], references: [id], onDelete: Cascade)
+
+  @@index([reconciliationId])
+  @@index([confidence])
+}
+
+// Duplicate records
+model DuplicateRecord {
+  id                String   @id @default(cuid())
+  reconciliationId  String
+  invoiceId1        String
+  invoiceId2        String
+  uploadType        String   // "books", "gstr2b", or "both"
+  reason            String   // Why they're duplicates
+  createdAt         DateTime @default(now())
+
+  reconciliation Reconciliation @relation(fields: [reconciliationId], references: [id], onDelete: Cascade)
+  invoice1       Invoice         @relation(fields: [invoiceId1], references: [id], onDelete: Restrict, name: "duplicate_1")
+  invoice2       Invoice         @relation(fields: [invoiceId2], references: [id], onDelete: Restrict, name: "duplicate_2")
+
+  @@index([reconciliationId])
+  @@index([uploadType])
+}
+
+// Application settings
+model Settings {
+  id                  String   @id @default(cuid())
+  key                 String   @unique
+  value               Json
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([key])
+}
