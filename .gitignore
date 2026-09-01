@@ -1,33 +1,33 @@
-# Dependencies
+# Ignore node_modules and dependencies
 node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
+npm-debug.log
+yarn-error.log
+pnpm-debug.log
 
-# Environment
+# Ignore environment variables
 .env
 .env.local
 .env.*.local
 
-# Build artifacts
+# Ignore build outputs
 dist/
 build/
 .next/
-out/
+.nuxt/
+.cache/
+.parcel-cache/
 
-# Database
+# Ignore logs
+logs/
+*.log
+
+# Ignore database files
 *.db
-*.db-wal
-*.db-shm
-prisma/*.db
+*.sqlite
+*.sqlite3
+*.db-journal
 
-# Uploads
-uploads/
-temp/
-*.xlsx
-*.xls
-
-# IDE
+# Ignore IDE files
 .vscode/
 .idea/
 *.swp
@@ -35,10 +35,18 @@ temp/
 *~
 .DS_Store
 
-# Testing
+# Ignore test coverage
 coverage/
 .nyc_output/
 
-# OS
-Thumbs.db
+# Ignore Prisma generated files
+prisma/generated/
+
+# Ignore uploaded files
+uploads/
+temp/
+tmp/
+
+# Ignore OS files
 .DS_Store
+Thumbs.db

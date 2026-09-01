@@ -2,20 +2,42 @@
   "name": "gst-reconciliation-tool",
   "version": "1.0.0",
   "description": "Production-grade GST reconciliation tool - local-first business application",
+  "private": false,
+  "license": "MIT",
   "scripts": {
     "install-all": "npm install && cd backend && npm install && cd ../frontend && npm install",
-    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
-    "dev:backend": "cd backend && npm run dev",
-    "dev:frontend": "cd frontend && npm run dev",
-    "build": "npm run build:backend && npm run build:frontend",
-    "build:backend": "cd backend && npm run build",
-    "build:frontend": "cd frontend && npm run build",
-    "test": "cd backend && npm run test",
+    "dev": "concurrently \"cd backend && npm run dev\" \"cd frontend && npm run dev\"",
+    "build": "cd backend && npm run build && cd ../frontend && npm run build",
+    "test": "cd backend && npm test",
     "db:setup": "cd backend && npm run db:setup",
+    "db:studio": "cd backend && npm run db:studio",
     "db:migrate": "cd backend && npm run db:migrate",
-    "start:backend": "cd backend && npm start"
+    "db:reset": "cd backend && npm run db:reset",
+    "lint": "cd backend && npm run lint && cd ../frontend && npm run lint"
   },
-  "dependencies": {
-    "concurrently": "^8.2.0"
-  }
+  "devDependencies": {
+    "concurrently": "^8.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "keywords": [
+    "gst",
+    "reconciliation",
+    "india",
+    "tax",
+    "accounting",
+    "local-first",
+    "privacy"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MayurConnects/gst-reconciliation-tool.git"
+  },
+  "author": "Mayur Connects",
+  "bugs": {
+    "url": "https://github.com/MayurConnects/gst-reconciliation-tool/issues"
+  },
+  "homepage": "https://github.com/MayurConnects/gst-reconciliation-tool#readme"
 }
